@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Timeseries Association Prototype</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f6fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      gap: 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    header p {
+      margin-top: 4px;
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      width: 100%;
+      max-width: 1100px;
+      padding: 24px 28px;
+    }
+
+    /* ── Search card ── */
+    .search-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-row .control-group {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .autocomplete-wrap {
+      position: relative;
+    }
+
+    .autocomplete-wrap input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: #1a1a2e;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .autocomplete-wrap input:focus {
+      border-color: #4361ee;
+    }
+
+    .autocomplete-wrap input.selected {
+      border-color: #06d6a0;
+      background: #f0fdf9;
+    }
+
+    .ac-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      z-index: 100;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .ac-item {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .ac-item:hover {
+      background: #f3f4f6;
+    }
+
+    .ac-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .ac-id {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      font-family: monospace;
+      white-space: nowrap;
+    }
+
+    .ac-desc {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ac-empty {
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+
+    #search-status {
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: #6b7280;
+      min-height: 1.2em;
+    }
+
+    #search-status.error { color: #ef4444; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-bottom: 24px;
+      align-items: flex-end;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6b7280;
+    }
+
+    .toggle-group {
+      display: flex;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .toggle-group button {
+      padding: 7px 18px;
+      border: none;
+      background: transparent;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: #6b7280;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .toggle-group button:not(:last-child) {
+      border-right: 1.5px solid #e5e7eb;
+    }
+
+    .toggle-group button.active {
+      background: #4361ee;
+      color: #ffffff;
+    }
+
+    .toggle-group button:hover:not(.active) {
+      background: #f3f4f6;
+    }
+
+    #chart { width: 100%; height: 520px; }
+
+    .info-bar {
+      margin-top: 16px;
+      font-size: 0.78rem;
+      color: #9ca3af;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .info-bar span strong { color: #6b7280; }
+
+    a { color: #4361ee; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #4361ee;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Association Timeseries Explorer</h1>
+  <p id="subtitle">Search for a target and disease below to explore their association over time.</p>
+</header>
+
+<!-- ── Search card ── -->
+<div class="card">
+  <div class="search-row">
+
+    <div class="control-group">
+      <label>Target (gene symbol)</label>
+      <div class="autocomplete-wrap">
+        <input id="target-input" type="text" placeholder="e.g. TSLP" autocomplete="off" />
+        <div class="ac-dropdown" id="target-dropdown"></div>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Disease</label>
+      <div class="autocomplete-wrap">
+        <input id="disease-input" type="text" placeholder="e.g. asthma" autocomplete="off" />
+        <div class="ac-dropdown" id="disease-dropdown"></div>
+      </div>
+    </div>
+
+  </div>
+  <div id="search-status"></div>
+</div>
+
+<!-- ── Chart card (hidden until a pair is loaded) ── -->
+<div class="card" id="chart-card" style="display:none">
+
+  <div class="controls">
+
+    <div class="control-group">
+      <label>Association type</label>
+      <div class="toggle-group">
+        <button id="btn-direct"   class="active" onclick="setDirect(true)">Direct</button>
+        <button id="btn-indirect"               onclick="setDirect(false)">Indirect</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Metric (Y axis)</label>
+      <div class="toggle-group">
+        <button id="btn-score"   class="active" onclick="setMetric('associationScore')">Association Score</button>
+        <button id="btn-novelty"               onclick="setMetric('novelty')">Novelty</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Series</label>
+      <div class="toggle-group">
+        <button id="btn-overall"     onclick="setSeriesView('overall')">Overall only</button>
+        <button id="btn-datasources" onclick="setSeriesView('datasources')">Datasources only</button>
+        <button id="btn-overlay"     class="active" onclick="setSeriesView('overlay')">Overlay</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="chart"></div>
+
+  <div class="info-bar">
+    <span id="info-target"><strong>Target:</strong> —</span>
+    <span id="info-disease"><strong>Disease:</strong> —</span>
+    <span id="info-rows"><strong>Visible points:</strong> —</span>
+    <span style="color:#d1d5db">|</span>
+    <span>Rows without a year (summary records) are excluded from the plot.</span>
+  </div>
+
+</div>
+
+<script>
+// ── Datasource label map (raw value → display name) ──────────────────────────
+const DATASOURCE_LABELS = {
+  chembl:               'ChEMBL',
+  europepmc:            'Europe PMC',
+  gwas_credible_sets:   'GWAS Credible Sets',
+  impc:                 'IMPC',
+  expression_atlas:     'Expression Atlas',
+  cancer_gene_census:   'Cancer Gene Census',
+  eva:                  'EVA',
+  genomics_england:     'Genomics England',
+  uniprot_literature:   'UniProt Literature',
+  orphanet:             'Orphanet',
+  uniprot_variants:     'UniProt Variants',
+  gene2phenotype:       'Gene2Phenotype',
+  clingen:              'ClinGen',
+  crispr_screen:        'CRISPR Screen',
+  intogen:              'IntOGen',
+  eva_somatic:          'EVA Somatic',
+  reactome:             'Reactome',
+  gene_burden:          'Gene Burden',
+  crispr:               'CRISPR',
+  cancer_biomarkers:    'Cancer Biomarkers',
+};
+
+// Enough distinct colours for up to 20 datasources.
+const COLOR_PALETTE = [
+  '#4361ee', '#f72585', '#06d6a0', '#fb8500', '#7209b7',
+  '#4cc9f0', '#e63946', '#2ec4b6', '#f4a261', '#606c38',
+  '#3a0ca3', '#dda15e', '#457b9d', '#a8dadc', '#e71d36',
+  '#ff9f1c', '#264653', '#bc6c25', '#cbf3f0', '#1d3557',
+];
+
+// ── Series — built dynamically from loaded data ───────────────────────────────
+let SERIES = [];
+
+function buildSeriesFromData(data) {
+  const seen = new Map();
+  for (const r of data) {
+    const key = `${r.aggregationType}|${r.aggregationValue}`;
+    if (!seen.has(key)) {
+      seen.set(key, { aggType: r.aggregationType, aggVal: r.aggregationValue });
+    }
+  }
+  // Overall first, then datasources alphabetically.
+  const entries = [...seen.values()].sort((a, b) => {
+    if (a.aggType === 'overall') return -1;
+    if (b.aggType === 'overall') return 1;
+    return a.aggVal.localeCompare(b.aggVal);
+  });
+  return entries.map((e, i) => ({
+    key:     `${e.aggType}_${e.aggVal}`,
+    label:   e.aggType === 'overall' ? 'Overall' : (DATASOURCE_LABELS[e.aggVal] ?? e.aggVal),
+    aggType: e.aggType,
+    aggVal:  e.aggVal,
+    color:   COLOR_PALETTE[i % COLOR_PALETTE.length],
+  }));
+}
+
+const METRIC_LABELS = {
+  associationScore: 'Association Score',
+  novelty:          'Novelty',
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let isDirect   = true;
+let metric     = 'associationScore';
+let seriesView = 'overlay';
+let allData    = [];
+
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+class Autocomplete {
+  constructor({ inputId, dropdownId, searchUrl, labelKey, idKey, onSelect }) {
+    this.input      = document.getElementById(inputId);
+    this.dropdown   = document.getElementById(dropdownId);
+    this.searchUrl  = searchUrl;
+    this.labelKey   = labelKey;
+    this.idKey      = idKey;
+    this.onSelect   = onSelect;
+    this.selectedId = null;
+    this._timer     = null;
+
+    this.input.addEventListener('input', () => {
+      this.selectedId = null;
+      this.input.classList.remove('selected');
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => this._search(), 300);
+    });
+
+    document.addEventListener('click', e => {
+      if (!this.input.contains(e.target) && !this.dropdown.contains(e.target)) {
+        this._hide();
+      }
+    });
+  }
+
+  async _search() {
+    const q = this.input.value.trim();
+    if (!q) { this._hide(); return; }
+
+    const res   = await fetch(`${this.searchUrl}?q=${encodeURIComponent(q)}`);
+    const items = await res.json();
+    this._show(items);
+  }
+
+  _show(items) {
+    if (!items.length) {
+      this.dropdown.innerHTML = '<div class="ac-empty">No results</div>';
+      this.dropdown.style.display = 'block';
+      return;
+    }
+    this.dropdown.innerHTML = items.map(item =>
+      `<div class="ac-item" data-id="${item[this.idKey]}" data-label="${item[this.labelKey]}">
+        <div class="ac-item-top">
+          <span>${item[this.labelKey]}</span>
+          <span class="ac-id">${item[this.idKey]}</span>
+        </div>
+        ${item.description ? `<span class="ac-desc">${item.description}</span>` : ''}
+      </div>`
+    ).join('');
+    this.dropdown.style.display = 'block';
+
+    this.dropdown.querySelectorAll('.ac-item').forEach(el =>
+      el.addEventListener('click', () => this._select(el.dataset.id, el.dataset.label))
+    );
+  }
+
+  _select(id, label) {
+    this.selectedId   = id;
+    this.input.value  = label;
+    this.input.classList.add('selected');
+    this._hide();
+    this.onSelect(id, label);
+  }
+
+  _hide() {
+    this.dropdown.style.display = 'none';
+    this.dropdown.innerHTML = '';
+  }
+}
+
+// ── Pair selection + data loading ─────────────────────────────────────────────
+let selectedTargetId  = null;
+let selectedDiseaseId = null;
+
+const targetAC = new Autocomplete({
+  inputId:   'target-input',
+  dropdownId:'target-dropdown',
+  searchUrl: '/api/search/targets',
+  labelKey:  'approvedSymbol',
+  idKey:     'targetId',
+  onSelect:  id => { selectedTargetId = id;  maybeLoad(); },
+});
+
+const diseaseAC = new Autocomplete({
+  inputId:   'disease-input',
+  dropdownId:'disease-dropdown',
+  searchUrl: '/api/search/diseases',
+  labelKey:  'name',
+  idKey:     'diseaseId',
+  onSelect:  id => { selectedDiseaseId = id; maybeLoad(); },
+});
+
+function maybeLoad() {
+  if (!selectedTargetId || !selectedDiseaseId) return;
+  loadTimeseries(selectedTargetId, selectedDiseaseId);
+}
+
+function setStatus(msg, isError = false) {
+  const el = document.getElementById('search-status');
+  el.className = isError ? 'error' : '';
+  el.innerHTML = msg;
+}
+
+async function loadTimeseries(targetId, diseaseId) {
+  setStatus('<span class="spinner"></span>Loading…');
+
+  try {
+    const res = await fetch(
+      `/api/timeseries?targetId=${encodeURIComponent(targetId)}&diseaseId=${encodeURIComponent(diseaseId)}`
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      setStatus(`Error: ${err.detail}`, true);
+      return;
+    }
+
+    allData = await res.json();
+    SERIES  = buildSeriesFromData(allData);
+    setStatus('');
+
+    const symbol      = allData.find(r => r.approvedSymbol)?.approvedSymbol ?? targetId;
+    const diseaseName = allData.find(r => r.name)?.name ?? diseaseId;
+
+    const targetUrl  = `https://platform.opentargets.org/target/${targetId}`;
+    const diseaseUrl = `https://platform.opentargets.org/disease/${diseaseId}`;
+
+    document.getElementById('subtitle').innerHTML =
+      `Target: <a href="${targetUrl}" target="_blank" rel="noopener">${symbol}</a>` +
+      `  ·  ` +
+      `Disease: <a href="${diseaseUrl}" target="_blank" rel="noopener">${diseaseName}</a>`;
+
+    document.getElementById('info-target').innerHTML =
+      `<strong>Target:</strong> <a href="${targetUrl}" target="_blank" rel="noopener">${symbol}</a>`;
+    document.getElementById('info-disease').innerHTML =
+      `<strong>Disease:</strong> <a href="${diseaseUrl}" target="_blank" rel="noopener">${diseaseName}</a>`;
+
+    document.getElementById('chart-card').style.display = 'block';
+    render();
+
+  } catch (e) {
+    setStatus(`Failed to fetch data: ${e.message}`, true);
+  }
+}
+
+// ── Build Plotly traces ───────────────────────────────────────────────────────
+function buildTraces(data, direct, met) {
+  const visibleSeries = SERIES.filter(s => {
+    if (seriesView === 'overall')     return s.aggType === 'overall';
+    if (seriesView === 'datasources') return s.aggType === 'datasourceId';
+    return true;
+  });
+
+  return visibleSeries.map(s => {
+    const rows = data
+      .filter(r =>
+        r.aggregationType === s.aggType &&
+        r.aggregationValue === s.aggVal &&
+        r.isDirect === direct &&
+        r.year != null
+      )
+      .sort((a, b) => a.year - b.year);
+
+    const customdata = rows.map(r => ({
+      year:  r.year,
+      score: r.associationScore != null ? r.associationScore.toFixed(6) : 'N/A',
+      nov:   r.novelty           != null ? r.novelty.toFixed(6)          : 'N/A',
+      ev:    r.yearlyEvidenceCount != null ? r.yearlyEvidenceCount        : 'N/A',
+    }));
+
+    return {
+      x:           rows.map(r => r.year),
+      y:           rows.map(r => { const v = r[met]; return (v == null || isNaN(v)) ? null : v; }),
+      customdata:  customdata,
+      name:        s.label,
+      type:        'scatter',
+      mode:        'lines+markers',
+      line:        { color: s.color, width: 2 },
+      marker:      { color: s.color, size: 7, symbol: 'circle', line: { color: '#ffffff', width: 1.5 } },
+      connectgaps: false,
+      hovertemplate:
+        `<b>${s.label}</b><br>` +
+        `Year: <b>%{customdata.year}</b><br>` +
+        `─────────────────<br>` +
+        `Association Score: %{customdata.score}<br>` +
+        `Novelty: %{customdata.nov}<br>` +
+        `Evidence Count: %{customdata.ev}` +
+        `<extra></extra>`,
+    };
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const traces = buildTraces(allData, isDirect, metric);
+
+  // Compute a small negative floor so dots at y=0 are not clipped by the axis.
+  const allY = traces.flatMap(t => t.y).filter(v => v != null && !isNaN(v));
+  const yMax = allY.length ? Math.max(...allY) : 1;
+  const yPad = yMax * 0.03;
+
+  const layout = {
+    xaxis: {
+      title:      { text: 'Year', standoff: 12 },
+      tickformat: 'd',
+      showgrid:   true,
+      gridcolor:  '#f0f0f5',
+      zeroline:   false,
+    },
+    yaxis: {
+      title:         { text: METRIC_LABELS[metric], standoff: 12 },
+      showgrid:      true,
+      gridcolor:     '#f0f0f5',
+      zeroline:      true,
+      zerolinecolor: '#e5e7eb',
+      range:         [-yPad, yMax + yPad],
+    },
+    legend: {
+      orientation: 'h',
+      yanchor:     'bottom',
+      y:           1.02,
+      xanchor:     'left',
+      x:           0,
+      bgcolor:     'rgba(255,255,255,0)',
+    },
+    hovermode:     'closest',
+    plot_bgcolor:  '#ffffff',
+    paper_bgcolor: '#ffffff',
+    margin:        { t: 48, r: 24, b: 60, l: 72 },
+    transition:    { duration: 300, easing: 'cubic-in-out' },
+  };
+
+  const config = {
+    responsive: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+  };
+
+  Plotly.react('chart', traces, layout, config);
+
+  const pts = traces.reduce((s, t) => s + t.x.length, 0);
+  document.getElementById('info-rows').innerHTML = `<strong>Visible points:</strong> ${pts}`;
+}
+
+// ── Toggle handlers ───────────────────────────────────────────────────────────
+function setDirect(val) {
+  isDirect = val;
+  document.getElementById('btn-direct').classList.toggle('active',   val);
+  document.getElementById('btn-indirect').classList.toggle('active', !val);
+  render();
+}
+
+function setMetric(val) {
+  metric = val;
+  document.getElementById('btn-score').classList.toggle('active',   val === 'associationScore');
+  document.getElementById('btn-novelty').classList.toggle('active', val === 'novelty');
+  render();
+}
+
+function setSeriesView(val) {
+  seriesView = val;
+  document.getElementById('btn-overall').classList.toggle('active',      val === 'overall');
+  document.getElementById('btn-datasources').classList.toggle('active',  val === 'datasources');
+  document.getElementById('btn-overlay').classList.toggle('active',      val === 'overlay');
+  render();
+}
+</script>
+
+</body>
+</html>
