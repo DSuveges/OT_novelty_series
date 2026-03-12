@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import duckdb
+from loguru import logger
 
 BACKEND_DIR     = Path(__file__).parent
 PROJECT_DIR     = BACKEND_DIR.parent
@@ -29,9 +30,9 @@ def build_search(
     target_dir: Path,
     disease_dir: Path,
 ) -> None:
-    print(f"Database      : {db_path}")
-    print(f"search_target : {target_dir}")
-    print(f"search_disease: {disease_dir}")
+    logger.info(f"Database      : {db_path}")
+    logger.info(f"search_target : {target_dir}")
+    logger.info(f"search_disease: {disease_dir}")
 
     con = duckdb.connect(str(db_path))
 
@@ -40,7 +41,7 @@ def build_search(
         ("search_diseases", disease_dir),
     ]:
         t0 = time.time()
-        print(f"\nImporting {table}…")
+        logger.info(f"Importing {table}…")
 
         # Read only the columns we need to keep the table lean.
         # `prefixes` is used for matching; `multiplier` for ranking.
@@ -52,10 +53,10 @@ def build_search(
         """)
 
         n = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        print(f"  {n:,} rows imported in {time.time() - t0:.1f}s")
+        logger.info(f"{n:,} rows imported in {time.time() - t0:.1f}s")
 
     con.close()
-    print("\nDone.")
+    logger.success("Done.")
 
 
 def main() -> None:

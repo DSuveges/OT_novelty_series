@@ -18,18 +18,19 @@ import time
 from pathlib import Path
 
 import duckdb
+from loguru import logger
 
 DEFAULT_DB = Path(__file__).parent / "timeseries.db"
 
 
 def build(parquet_dir: Path, db_path: Path, *, skip_index: bool = False) -> None:
-    print(f"Source  : {parquet_dir}")
-    print(f"Database: {db_path}")
+    logger.info(f"Source  : {parquet_dir}")
+    logger.info(f"Database: {db_path}")
 
     if db_path.exists():
         answer = input(f"\n{db_path} already exists. Overwrite? [y/N] ").strip().lower()
         if answer != "y":
-            print("Aborted.")
+            logger.warning("Aborted.")
             return
         db_path.unlink()
 
@@ -37,17 +38,17 @@ def build(parquet_dir: Path, db_path: Path, *, skip_index: bool = False) -> None
 
     # ── 1. Import all Parquet files ───────────────────────────────────────────
     t0 = time.time()
-    print("\n[1/3] Importing Parquet files…")
+    logger.info("[1/3] Importing Parquet files…")
     con.execute(f"""
         CREATE TABLE timeseries AS
         SELECT * FROM read_parquet('{parquet_dir}/*.parquet')
     """)
     n = con.execute("SELECT COUNT(*) FROM timeseries").fetchone()[0]
-    print(f"      {n:,} rows imported in {time.time() - t0:.1f}s")
+    logger.info(f"{n:,} rows imported in {time.time() - t0:.1f}s")
 
     # ── 2. Autocomplete lookup tables ─────────────────────────────────────────
     t0 = time.time()
-    print("\n[2/3] Building autocomplete lookup tables…")
+    logger.info("[2/3] Building autocomplete lookup tables…")
     con.execute("""
         CREATE TABLE targets AS
         SELECT DISTINCT targetId, approvedSymbol
@@ -64,13 +65,13 @@ def build(parquet_dir: Path, db_path: Path, *, skip_index: bool = False) -> None
     """)
     nt = con.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
     nd = con.execute("SELECT COUNT(*) FROM diseases").fetchone()[0]
-    print(f"      {nt:,} targets · {nd:,} diseases ({time.time() - t0:.1f}s)")
+    logger.info(f"{nt:,} targets · {nd:,} diseases ({time.time() - t0:.1f}s)")
 
     # ── 3. Indexes ────────────────────────────────────────────────────────────
     if skip_index:
-        print("\n[3/3] Skipping index creation (--skip-index).")
+        logger.info("[3/3] Skipping index creation (--skip-index).")
     else:
-        print("\n[3/3] Creating indexes…")
+        logger.info("[3/3] Creating indexes…")
         for label, ddl in [
             (
                 "timeseries (targetId, diseaseId)",
@@ -86,14 +87,13 @@ def build(parquet_dir: Path, db_path: Path, *, skip_index: bool = False) -> None
             ),
         ]:
             t0 = time.time()
-            print(f"      {label}… ", end="", flush=True)
             con.execute(ddl)
-            print(f"{time.time() - t0:.1f}s")
+            logger.info(f"{label}: {time.time() - t0:.1f}s")
 
     con.close()
 
     size_mb = db_path.stat().st_size / 1_048_576
-    print(f"\nDone — {db_path} ({size_mb:,.0f} MB)")
+    logger.success(f"Done — {db_path} ({size_mb:,.0f} MB)")
 
 
 def main() -> None:
