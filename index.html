@@ -644,10 +644,15 @@ function render() {
     transition:    { duration: 300, easing: 'cubic-in-out' },
   };
 
+  const directLabel = isDirect ? 'direct' : 'indirect';
+  const metricLabel = metric === 'associationScore' ? 'association' : 'novelty';
+  const filename = `${selectedTargetId}_${selectedDiseaseId}_${metricLabel}_${directLabel}`;
+
   const config = {
     responsive: true,
     displaylogo: false,
     modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+    toImageButtonOptions: { filename, format: 'png' },
   };
 
   Plotly.react('chart', traces, layout, config);
