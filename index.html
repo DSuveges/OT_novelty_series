@@ -230,6 +230,9 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Rounded corners on Plotly hover tooltip (SVG rect) */
+    .hovertext rect { rx: 6; ry: 6; }
   </style>
 </head>
 <body>
@@ -578,10 +581,9 @@ function buildTraces(data, direct, met) {
       opacity:     isOverall ? 1 : 0.8,
       connectgaps: false,
       hoverlabel: {
-        bgcolor:      hexToRgba(s.color, 0.15),
-        bordercolor:  s.color,
-        font:         { color: '#1f2937', size: 12 },
-        borderradius: 6,
+        bgcolor:     hexToRgba(s.color, 0.15),
+        bordercolor: s.color,
+        font:        { color: '#1f2937', size: 12 },
       },
       hovertemplate:
         `<b>${s.label}</b><br>` +
