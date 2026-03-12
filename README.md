@@ -14,6 +14,14 @@ Key capabilities:
 
 The prototype is intentionally lightweight — a single-page frontend served by a FastAPI backend with a pre-built DuckDB database — so that it can be run locally without infrastructure dependencies.
 
+## Screenshots
+
+Example: **TSLP / asthma** (ENSG00000145777 · MONDO:0004979)
+
+| Association score over time | Novelty over time |
+|---|---|
+| ![Association score](docs/images/ENSG00000145777_MONDO_0004979_association_direct.png) | ![Novelty](docs/images/ENSG00000145777_MONDO_0004979_novelty_direct.png) |
+
 ## Architecture
 
 ```
