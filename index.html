@@ -648,8 +648,9 @@ function render() {
   const filename = `${selectedTargetId}_${selectedDiseaseId}_${metricLabel}_${directLabel}`;
 
   const config = {
-    responsive: true,
-    displaylogo: false,
+    responsive:      true,
+    displaylogo:     false,
+    displayModeBar:  true,
     modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
     toImageButtonOptions: { filename, format: 'png' },
   };
