@@ -332,12 +332,16 @@ const DATASOURCE_LABELS = {
   cancer_biomarkers:    'Cancer Biomarkers',
 };
 
-// Enough distinct colours for up to 20 datasources.
-const COLOR_PALETTE = [
-  '#4361ee', '#f72585', '#06d6a0', '#fb8500', '#7209b7',
-  '#4cc9f0', '#e63946', '#2ec4b6', '#f4a261', '#606c38',
-  '#3a0ca3', '#dda15e', '#457b9d', '#a8dadc', '#e71d36',
-  '#ff9f1c', '#264653', '#bc6c25', '#cbf3f0', '#1d3557',
+// Fixed colour for the Overall series.
+const OVERALL_COLOR      = '#3489ca';
+const OVERALL_FILL_COLOR = 'rgba(52,137,202,0.08)';
+
+// Distinct colours for datasource series (Tableau-inspired, avoids the overall blue).
+const DATASOURCE_PALETTE = [
+  '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948',
+  '#b07aa1', '#ff9da7', '#9c755f', '#499894', '#e49c55',
+  '#c9a868', '#86bcb6', '#d37295', '#fabfd2', '#a0cbe8',
+  '#ffbe7d', '#8cd17d', '#b6992d', '#f1ce63', '#79706e',
 ];
 
 // ── Series — built dynamically from loaded data ───────────────────────────────
@@ -357,13 +361,17 @@ function buildSeriesFromData(data) {
     if (b.aggType === 'overall') return 1;
     return a.aggVal.localeCompare(b.aggVal);
   });
-  return entries.map((e, i) => ({
-    key:     `${e.aggType}_${e.aggVal}`,
-    label:   e.aggType === 'overall' ? 'Overall' : (DATASOURCE_LABELS[e.aggVal] ?? e.aggVal),
-    aggType: e.aggType,
-    aggVal:  e.aggVal,
-    color:   COLOR_PALETTE[i % COLOR_PALETTE.length],
-  }));
+  let dsIdx = 0;
+  return entries.map(e => {
+    const isOverall = e.aggType === 'overall';
+    return {
+      key:     `${e.aggType}_${e.aggVal}`,
+      label:   isOverall ? 'Overall' : (DATASOURCE_LABELS[e.aggVal] ?? e.aggVal),
+      aggType: e.aggType,
+      aggVal:  e.aggVal,
+      color:   isOverall ? OVERALL_COLOR : DATASOURCE_PALETTE[dsIdx++ % DATASOURCE_PALETTE.length],
+    };
+  });
 }
 
 const METRIC_LABELS = {
@@ -531,6 +539,7 @@ function buildTraces(data, direct, met) {
   });
 
   return visibleSeries.map(s => {
+    const isOverall = s.aggType === 'overall';
     const rows = data
       .filter(r =>
         r.aggregationType === s.aggType &&
@@ -542,8 +551,8 @@ function buildTraces(data, direct, met) {
 
     const customdata = rows.map(r => ({
       year:  r.year,
-      score: r.associationScore != null ? r.associationScore.toFixed(6) : 'N/A',
-      nov:   r.novelty           != null ? r.novelty.toFixed(6)          : 'N/A',
+      score: r.associationScore != null ? r.associationScore.toFixed(4) : 'N/A',
+      nov:   r.novelty           != null ? r.novelty.toFixed(4)          : 'N/A',
       ev:    r.yearlyEvidenceCount != null ? r.yearlyEvidenceCount        : 'N/A',
     }));
 
@@ -554,16 +563,18 @@ function buildTraces(data, direct, met) {
       name:        s.label,
       type:        'scatter',
       mode:        'lines+markers',
-      line:        { color: s.color, width: 2 },
-      marker:      { color: s.color, size: 7, symbol: 'circle', line: { color: '#ffffff', width: 1.5 } },
+      line:        { color: s.color, width: isOverall ? 3 : 1.5 },
+      marker:      { color: s.color, size: isOverall ? 9 : 5, symbol: 'circle', line: { color: '#ffffff', width: isOverall ? 2 : 1 } },
+      fill:        isOverall ? 'tozeroy' : 'none',
+      fillcolor:   isOverall ? OVERALL_FILL_COLOR : undefined,
+      opacity:     isOverall ? 1 : 0.8,
       connectgaps: false,
       hovertemplate:
         `<b>${s.label}</b><br>` +
         `Year: <b>%{customdata.year}</b><br>` +
-        `─────────────────<br>` +
         `Association Score: %{customdata.score}<br>` +
         `Novelty: %{customdata.nov}<br>` +
-        `Evidence Count: %{customdata.ev}` +
+        `Evidence count: %{customdata.ev}` +
         `<extra></extra>`,
     };
   });
@@ -579,20 +590,34 @@ function render() {
   const yPad = yMax * 0.03;
 
   const layout = {
+    font: {
+      family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      size:   12,
+      color:  '#374151',
+    },
     xaxis: {
-      title:      { text: 'Year', standoff: 12 },
+      title:      { text: 'Year', standoff: 14, font: { size: 12, color: '#6b7280' } },
       tickformat: 'd',
+      tickfont:   { size: 11 },
       showgrid:   true,
-      gridcolor:  '#f0f0f5',
+      gridcolor:  '#f3f4f6',
+      gridwidth:  1,
       zeroline:   false,
+      showline:   true,
+      linecolor:  '#e5e7eb',
     },
     yaxis: {
-      title:         { text: METRIC_LABELS[metric], standoff: 12 },
+      title:         { text: METRIC_LABELS[metric], standoff: 14, font: { size: 12, color: '#6b7280' } },
+      tickfont:      { size: 11 },
       showgrid:      true,
-      gridcolor:     '#f0f0f5',
+      gridcolor:     '#f3f4f6',
+      gridwidth:     1,
       zeroline:      true,
-      zerolinecolor: '#e5e7eb',
+      zerolinecolor: '#d1d5db',
+      zerolinewidth: 1.5,
       range:         [-yPad, yMax + yPad],
+      showline:      true,
+      linecolor:     '#e5e7eb',
     },
     legend: {
       orientation: 'h',
@@ -601,11 +626,18 @@ function render() {
       xanchor:     'left',
       x:           0,
       bgcolor:     'rgba(255,255,255,0)',
+      font:        { size: 11 },
+      itemsizing:  'constant',
+    },
+    hoverlabel: {
+      bgcolor:    '#1f2937',
+      bordercolor:'#1f2937',
+      font:       { color: '#f9fafb', size: 12 },
     },
     hovermode:     'closest',
     plot_bgcolor:  '#ffffff',
     paper_bgcolor: '#ffffff',
-    margin:        { t: 48, r: 24, b: 60, l: 72 },
+    margin:        { t: 56, r: 24, b: 64, l: 76 },
     transition:    { duration: 300, easing: 'cubic-in-out' },
   };
 
